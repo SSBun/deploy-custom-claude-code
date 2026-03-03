@@ -500,7 +500,113 @@ cmd_list() {
 }
 
 cmd_update() {
-    echo "TODO: Implement update command"
+    local tool_name=""
+    local new_api_key=""
+    local new_base_url=""
+    local new_model=""
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --api-key|-k)
+                new_api_key="$2"
+                shift 2
+                ;;
+            --base-url|-u)
+                new_base_url="$2"
+                shift 2
+                ;;
+            --model|-m)
+                new_model="$2"
+                shift 2
+                ;;
+            *)
+                if [ -z "$tool_name" ]; then
+                    tool_name="$1"
+                else
+                    echo -e "${RED}Unknown option: $1${NC}"
+                    exit 2
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    if [ -z "$tool_name" ]; then
+        echo -e "${RED}Error: Tool name is required${NC}"
+        echo "Usage: claude-custom update <name> [options]"
+        exit 2
+    fi
+
+    init_config
+    ensure_jq
+
+    # Normalize tool name
+    tool_name=$(normalize_tool_name "$tool_name")
+    local basename
+    basename=$(get_tool_basename "$tool_name")
+
+    # Check if deployment exists
+    if ! deployment_exists "$basename"; then
+        echo -e "${RED}Error: Deployment '$tool_name' not found${NC}"
+        echo ""
+        echo "Run 'claude-custom list' to see available deployments"
+        echo "Or use 'claude-custom add' to create a new deployment"
+        exit 1
+    fi
+
+    # Get current config
+    local current_api_key
+    current_api_key=$(jq -r ".deployments.\"$basename\".api_key" "$CONFIG_FILE")
+    local current_base_url
+    current_base_url=$(jq -r ".deployments.\"$basename\".base_url" "$CONFIG_FILE")
+    local current_model
+    current_model=$(jq -r ".deployments.\"$basename\".model" "$CONFIG_FILE")
+
+    # Prompt for values to update
+    if [ -z "$new_api_key" ]; then
+        read -p "API Key [$current_api_key]: " new_api_key
+        new_api_key="${new_api_key:-$current_api_key}"
+    fi
+
+    if [ -z "$new_base_url" ]; then
+        read -p "Base URL [$current_base_url]: " new_base_url
+        new_base_url="${new_base_url:-$current_base_url}"
+    fi
+
+    if [ -z "$new_model" ]; then
+        read -p "Model [$current_model]: " new_model
+        new_model="${new_model:-$current_model}"
+    fi
+
+    # Validate URL if changed
+    if [ "$new_base_url" != "$current_base_url" ]; then
+        if ! validate_url "$new_base_url"; then
+            exit 2
+        fi
+    fi
+
+    # Update config
+    if ! jq --arg name "$basename" \
+       --arg api_key "$new_api_key" \
+       --arg base_url "$new_base_url" \
+       --arg model "$new_model" \
+       '.deployments[$name] = {api_key: $api_key, base_url: $base_url, model: $model}' \
+       "$CONFIG_FILE" > "$CONFIG_FILE.tmp"; then
+        echo -e "${RED}Error: Failed to update config file${NC}" >&2
+        rm -f "$CONFIG_FILE.tmp"
+        exit 1
+    fi
+    if ! mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"; then
+        echo -e "${RED}Error: Failed to update config file${NC}" >&2
+        rm -f "$CONFIG_FILE.tmp"
+        exit 1
+    fi
+
+    # Rewrite wrapper script
+    write_wrapper_script "$tool_name" "$new_api_key" "$new_base_url" "$new_model"
+
+    echo -e "${GREEN}✓ Updated $tool_name${NC}"
 }
 
 cmd_migrate() {
