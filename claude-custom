@@ -278,6 +278,79 @@ show_version() {
     echo "claude-custom $VERSION"
 }
 
+show_add_help() {
+    cat << EOF
+Add a new custom model deployment
+
+Usage: claude-custom add <name> [options]
+
+Arguments:
+  <name>                  Name for the deployment (auto-prefixed with claude-)
+
+Options:
+  --api-key, -k <KEY>     API key for the model provider
+  --base-url, -u <URL>    Base URL for the API endpoint
+  --model, -m <MODEL>     Model name to use
+
+Examples:
+  claude-custom add doubao
+  claude-custom add glm --api-key sk-xxx --base-url https://api.example.com/v1 --model glm-4
+EOF
+}
+
+show_remove_help() {
+    cat << EOF
+Remove a deployment
+
+Usage: claude-custom remove <name>
+
+Arguments:
+  <name>                  Name of the deployment to remove
+
+Examples:
+  claude-custom remove doubao
+EOF
+}
+
+show_list_help() {
+    cat << EOF
+List all deployments
+
+Usage: claude-custom list
+EOF
+}
+
+show_update_help() {
+    cat << EOF
+Update a deployment
+
+Usage: claude-custom update <name> [options]
+
+Arguments:
+  <name>                  Name of the deployment to update
+
+Options:
+  --api-key, -k <KEY>     New API key
+  --base-url, -u <URL>    New base URL
+  --model, -m <MODEL>     New model name
+
+Examples:
+  claude-custom update doubao --model glm-4-6
+  claude-custom update glm --api-key sk-new-key
+EOF
+}
+
+show_migrate_help() {
+    cat << EOF
+Migrate existing deployments
+
+Usage: claude-custom migrate
+
+Import deployments created by the legacy deploy-claude-custom.sh script
+into the claude-custom manager.
+EOF
+}
+
 first_run_check() {
     # Only check for non-help commands
     if [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]] || [[ "$1" == "--version" ]] || [[ "$1" == "-v" ]]; then
@@ -308,6 +381,12 @@ first_run_check() {
 
 # Command implementations
 cmd_add() {
+    # Check for help flag
+    if [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
+        show_add_help
+        exit 0
+    fi
+
     local tool_name=""
     local api_key=""
     local base_url=""
@@ -440,6 +519,12 @@ cmd_add() {
 }
 
 cmd_remove() {
+    # Check for help flag
+    if [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
+        show_remove_help
+        exit 0
+    fi
+
     local tool_name="$1"
 
     if [ -z "$tool_name" ]; then
@@ -502,6 +587,12 @@ cmd_remove() {
 }
 
 cmd_list() {
+    # Check for help flag
+    if [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
+        show_list_help
+        exit 0
+    fi
+
     init_config
     ensure_jq
 
@@ -530,6 +621,12 @@ cmd_list() {
 }
 
 cmd_update() {
+    # Check for help flag
+    if [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
+        show_update_help
+        exit 0
+    fi
+
     local tool_name=""
     local new_api_key=""
     local new_base_url=""
@@ -651,6 +748,12 @@ cmd_update() {
 }
 
 cmd_migrate() {
+    # Check for help flag
+    if [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
+        show_migrate_help
+        exit 0
+    fi
+
     init_config
     ensure_jq
 
