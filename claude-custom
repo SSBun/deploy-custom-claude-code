@@ -11,7 +11,7 @@ VERSION="1.0.0"
 CONFIG_DIR="$HOME/.claude-custom"
 CONFIG_FILE="$CONFIG_DIR/config.json"
 CLAUDE_MODEL_DIR="$HOME/claude-model"
-BIN_DIR="$CLAUDE_MODEL_DIR/bin"
+BIN_DIR="$CONFIG_DIR/bin"
 
 # Colors for output
 RED='\033[0;31m'
@@ -159,16 +159,29 @@ configure_path() {
             ;;
     esac
 
-    local path_line='export PATH="$HOME/.claude-custom:$HOME/claude-model/bin:$PATH"'
+    local path_line='export PATH="$HOME/.claude-custom/bin:$PATH"'
 
     if [ "$detected_shell" = "fish" ]; then
-        path_line='set -gx PATH $HOME/.claude-custom $HOME/claude-model/bin $PATH'
+        path_line='set -gx PATH $HOME/.claude-custom/bin $PATH'
         mkdir -p "$(dirname "$shell_rc")"
     fi
 
     [ ! -f "$shell_rc" ] && touch "$shell_rc"
 
-    if ! grep -q "claude-model/bin" "$shell_rc" 2>/dev/null; then
+    # Check for old PATH entry and replace it, or add new one
+    if grep -q "claude-model/bin" "$shell_rc" 2>/dev/null; then
+        # Replace old PATH entry with new one
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            sed -i '' '/claude-model\/bin/d' "$shell_rc"
+        else
+            sed -i '/claude-model\/bin/d' "$shell_rc"
+        fi
+        echo "" >> "$shell_rc"
+        echo "# Claude Custom Models" >> "$shell_rc"
+        echo "$path_line" >> "$shell_rc"
+        echo -e "${GREEN}✓ Updated PATH in $shell_rc${NC}"
+        echo -e "${YELLOW}Run: source $shell_rc${NC}"
+    elif ! grep -q ".claude-custom/bin" "$shell_rc" 2>/dev/null; then
         echo "" >> "$shell_rc"
         echo "# Claude Custom Models" >> "$shell_rc"
         echo "$path_line" >> "$shell_rc"
@@ -618,6 +631,24 @@ cmd_add() {
 
     # Create bin directory
     mkdir -p "$BIN_DIR"
+
+    # Migrate existing wrappers from old location
+    local old_bin_dir="$CLAUDE_MODEL_DIR/bin"
+    if [ -d "$old_bin_dir" ]; then
+        local old_wrappers
+        old_wrappers=$(find "$old_bin_dir" -name "claude-*" -type f 2>/dev/null)
+        if [ -n "$old_wrappers" ]; then
+            echo "Migrating existing wrappers to ~/.claude-custom/bin/..."
+            for old_wrapper in $old_wrappers; do
+                local wrapper_name
+                wrapper_name=$(basename "$old_wrapper")
+                if [ ! -f "$BIN_DIR/$wrapper_name" ]; then
+                    mv "$old_wrapper" "$BIN_DIR/$wrapper_name" 2>/dev/null
+                    echo "  Migrated: $wrapper_name"
+                fi
+            done
+        fi
+    fi
 
     # Write wrapper script
     write_wrapper_script "$tool_name" "$api_key" "$base_url" "$model"
