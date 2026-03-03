@@ -62,7 +62,7 @@ ensure_jq() {
 # Check if a deployment exists
 deployment_exists() {
     local name="$1"
-    jq --arg name "$name" -e '.deployments[$name]' "$CONFIG_FILE" &> /dev/null
+    jq --arg name "$name" -e '.deployments[$name]' "$CONFIG_FILE" &> /dev/null || true
 }
 
 # Get deployment config
@@ -103,14 +103,22 @@ ensure_claude_code() {
     if [ ! -f "$CLAUDE_MODEL_DIR/node_modules/.bin/claude" ]; then
         echo -e "${YELLOW}Claude Code not found. Installing...${NC}"
         mkdir -p "$CLAUDE_MODEL_DIR"
+
+        local original_dir="$(pwd)"
         cd "$CLAUDE_MODEL_DIR"
 
         if [ ! -f "package.json" ]; then
             npm init -y > /dev/null 2>&1
         fi
 
-        npm install @anthropic-ai/claude-code
+        if ! npm install @anthropic-ai/claude-code; then
+            echo -e "${RED}Error: Failed to install Claude Code${NC}"
+            cd "$original_dir"
+            exit 1
+        fi
         echo -e "${GREEN}✓ Installed Claude Code${NC}"
+
+        cd "$original_dir"
     fi
 }
 
@@ -130,22 +138,22 @@ configure_path() {
 
     case "$detected_shell" in
         zsh)
-            SHELL_RC="$HOME/.zshrc"
+            shell_rc="$HOME/.zshrc"
             ;;
         bash)
             if [[ "$OSTYPE" == "darwin"* ]]; then
-                SHELL_RC="$HOME/.bash_profile"
-                [ ! -f "$SHELL_RC" ] && SHELL_RC="$HOME/.bashrc"
+                shell_rc="$HOME/.bash_profile"
+                [ ! -f "$shell_rc" ] && shell_rc="$HOME/.bashrc"
             else
-                SHELL_RC="$HOME/.bashrc"
-                [ ! -f "$SHELL_RC" ] && SHELL_RC="$HOME/.bash_profile"
+                shell_rc="$HOME/.bashrc"
+                [ ! -f "$shell_rc" ] && shell_rc="$HOME/.bash_profile"
             fi
             ;;
         fish)
-            SHELL_RC="$HOME/.config/fish/config.fish"
+            shell_rc="$HOME/.config/fish/config.fish"
             ;;
         *)
-            SHELL_RC="$HOME/.zshrc"
+            shell_rc="$HOME/.zshrc"
             ;;
     esac
 
@@ -153,17 +161,17 @@ configure_path() {
 
     if [ "$detected_shell" = "fish" ]; then
         path_line='set -gx PATH $HOME/claude-model/bin $PATH'
-        mkdir -p "$(dirname "$SHELL_RC")"
+        mkdir -p "$(dirname "$shell_rc")"
     fi
 
-    [ ! -f "$SHELL_RC" ] && touch "$SHELL_RC"
+    [ ! -f "$shell_rc" ] && touch "$shell_rc"
 
-    if ! grep -q "claude-model/bin" "$SHELL_RC" 2>/dev/null; then
-        echo "" >> "$SHELL_RC"
-        echo "# Claude Custom Models" >> "$SHELL_RC"
-        echo "$path_line" >> "$SHELL_RC"
-        echo -e "${GREEN}✓ Added to PATH in $SHELL_RC${NC}"
-        echo -e "${YELLOW}Run: source $SHELL_RC${NC}"
+    if ! grep -q "claude-model/bin" "$shell_rc" 2>/dev/null; then
+        echo "" >> "$shell_rc"
+        echo "# Claude Custom Models" >> "$shell_rc"
+        echo "$path_line" >> "$shell_rc"
+        echo -e "${GREEN}✓ Added to PATH in $shell_rc${NC}"
+        echo -e "${YELLOW}Run: source $shell_rc${NC}"
     fi
 }
 
