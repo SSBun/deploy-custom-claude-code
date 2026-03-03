@@ -449,8 +449,16 @@ cmd_remove() {
     fi
 
     # Remove from config
-    jq --arg name "$basename" 'del(.deployments[$name])' "$CONFIG_FILE" > "$CONFIG_FILE.tmp" && \
-    mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
+    if ! jq --arg name "$basename" 'del(.deployments[$name])' "$CONFIG_FILE" > "$CONFIG_FILE.tmp"; then
+        echo -e "${RED}Error: Failed to update config file${NC}" >&2
+        rm -f "$CONFIG_FILE.tmp"
+        exit 1
+    fi
+    if ! mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"; then
+        echo -e "${RED}Error: Failed to update config file${NC}" >&2
+        rm -f "$CONFIG_FILE.tmp"
+        exit 1
+    fi
 
     echo -e "${GREEN}✓ Removed $tool_name${NC}"
 }
