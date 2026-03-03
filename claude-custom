@@ -62,13 +62,13 @@ ensure_jq() {
 # Check if a deployment exists
 deployment_exists() {
     local name="$1"
-    jq -e ".deployments.\"$name\"" "$CONFIG_FILE" &> /dev/null
+    jq --arg name "$name" -e '.deployments[$name]' "$CONFIG_FILE" &> /dev/null
 }
 
 # Get deployment config
 get_deployment() {
     local name="$1"
-    jq -r ".deployments.\"$name\"" "$CONFIG_FILE"
+    jq --arg name "$name" -r '.deployments[$name]' "$CONFIG_FILE"
 }
 
 # Main entry point
