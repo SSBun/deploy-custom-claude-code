@@ -565,11 +565,35 @@ cmd_list() {
 
     echo "Deployed Models:"
     echo ""
-    printf "  %-20s %-40s %-30s\n" "NAME" "BASE URL" "MODEL"
-    echo "  ──────────────────── ──────────────────────────────────────── ─────────────────"
+    printf "  %-20s %-40s %-30s %-15s\n" "NAME" "BASE URL" "MODEL" "VERSION"
+    echo "  ──────────────────── ──────────────────────────────────────── ───────────────── ─────────────"
 
-    jq -r '.deployments | to_entries[] | @text "  \(.key |.[0:20]) \(.value.base_url |.[0:40]) \(.value.model |.[0:30])"' "$CONFIG_FILE" | while read -r line; do
-        echo "$line"
+    # Get list of deployment names
+    local names=()
+    while IFS= read -r name; do
+        names+=("$name")
+    done < <(jq -r '.deployments | keys[]' "$CONFIG_FILE")
+
+    # For each deployment, get info and version
+    for name in "${names[@]}"; do
+        local base_url model
+        base_url=$(jq -r ".deployments.\"$name\".base_url" "$CONFIG_FILE")
+        model=$(jq -r ".deployments.\"$name\".model" "$CONFIG_FILE")
+
+        # Get Claude version
+        local tool_name="claude-$name"
+        local wrapper_path="$BIN_DIR/$tool_name"
+        local version="N/A"
+
+        if [ -f "$wrapper_path" ]; then
+            version=$("$wrapper_path" --version 2>/dev/null || echo "N/A")
+            # Extract just the version number if possible
+            if [[ "$version" =~ [0-9]+\.[0-9]+\.[0-9]+ ]]; then
+                version="${BASH_REMATCH[0]}"
+            fi
+        fi
+
+        printf "  %-20s %-40s %-30s %-15s\n" "$name" "${base_url:0:40}" "${model:0:30}" "$version"
     done
 
     echo ""
