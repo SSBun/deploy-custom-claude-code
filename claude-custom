@@ -382,13 +382,21 @@ cmd_add() {
 
     # Save to config
     local basename=$(get_tool_basename "$tool_name")
-    jq --arg name "$basename" \
+    if ! jq --arg name "$basename" \
        --arg api_key "$api_key" \
        --arg base_url "$base_url" \
        --arg model "$model" \
        '.deployments[$name] = {api_key: $api_key, base_url: $base_url, model: $model}' \
-       "$CONFIG_FILE" > "$CONFIG_FILE.tmp" && \
-    mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
+       "$CONFIG_FILE" > "$CONFIG_FILE.tmp"; then
+        echo -e "${RED}Error: Failed to update config file${NC}" >&2
+        rm -f "$CONFIG_FILE.tmp"
+        exit 1
+    fi
+    if ! mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"; then
+        echo -e "${RED}Error: Failed to update config file${NC}" >&2
+        rm -f "$CONFIG_FILE.tmp"
+        exit 1
+    fi
 
     # Configure PATH
     configure_path
