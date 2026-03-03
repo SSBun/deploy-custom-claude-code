@@ -237,6 +237,24 @@ main() {
         upgrade)
             cmd_upgrade "$@"
             ;;
+        test)
+            cmd_test "$@"
+            ;;
+        config)
+            cmd_config "$@"
+            ;;
+        export)
+            cmd_export "$@"
+            ;;
+        import)
+            cmd_import "$@"
+            ;;
+        doctor)
+            cmd_doctor "$@"
+            ;;
+        uninstall)
+            cmd_uninstall "$@"
+            ;;
         self-update)
             cmd_self_update "$@"
             ;;
@@ -266,6 +284,12 @@ Commands:
   list         List all deployments
   update       Update a deployment configuration
   upgrade      Upgrade Claude Code to latest version
+  test         Test deployment(s) functionality
+  config       Manage configuration
+  export       Export deployments to file
+  import       Import deployments from file
+  doctor       Diagnose common issues
+  uninstall    Uninstall claude-custom
   self-update  Update claude-custom itself
 
 Options:
@@ -372,6 +396,118 @@ replaces the current installation.
 
 Examples:
   claude-custom self-update
+EOF
+}
+
+show_config_help() {
+    cat << EOF
+Manage configuration
+
+Usage: claude-custom config [action]
+
+Actions:
+  (none)       Show configuration file location
+  show         Show configuration file contents
+  edit         Edit configuration file in default editor
+  validate     Validate configuration file syntax
+
+Examples:
+  claude-custom config
+  claude-custom config show
+  claude-custom config edit
+  claude-custom config validate
+EOF
+}
+
+show_test_help() {
+    cat << EOF
+Test deployments
+
+Usage: claude-custom test [name] [options]
+
+Arguments:
+  <name>                  Name of deployment to test (optional)
+
+Options:
+  --all, -a               Test all deployments
+  --verbose, -v           Show detailed output
+
+Examples:
+  claude-custom test zenmux
+  claude-custom test --all
+  claude-custom test --all --verbose
+EOF
+}
+
+show_export_help() {
+    cat << EOF
+Export deployments configuration
+
+Usage: claude-custom export [file]
+
+Arguments:
+  <file>                  Output file (optional, defaults to stdout)
+
+Examples:
+  claude-custom export
+  claude-custom export backup.json
+EOF
+}
+
+show_import_help() {
+    cat << EOF
+Import deployments configuration
+
+Usage: claude-custom import [file] [options]
+
+Arguments:
+  <file>                  Input file (optional, defaults to stdin)
+
+Options:
+  --merge, -m             Merge with existing config instead of replace
+  --dry-run, -n           Show what would be imported without importing
+
+Examples:
+  claude-custom import backup.json
+  claude-custom import backup.json --merge
+  cat backup.json | claude-custom import
+EOF
+}
+
+show_doctor_help() {
+    cat << EOF
+Diagnose common issues
+
+Usage: claude-custom doctor
+
+Checks:
+  - Claude Code installation
+  - jq installation
+  - PATH configuration
+  - Config file validity
+  - Deployment wrapper scripts
+  - Network connectivity
+  - Permissions
+
+Examples:
+  claude-custom doctor
+EOF
+}
+
+show_uninstall_help() {
+    cat << EOF
+Uninstall claude-custom
+
+Usage: claude-custom uninstall [options]
+
+Options:
+  --all, -a               Remove all deployments and configuration
+  --force, -f             Skip confirmation prompts
+
+Examples:
+  claude-custom uninstall
+  claude-custom uninstall --all
+  claude-custom uninstall --force
 EOF
 }
 
@@ -1020,6 +1156,627 @@ cmd_self_update() {
     echo "  New version:      $new_version"
     echo ""
     echo "Run 'claude-custom --help' to see new features."
+}
+
+cmd_config() {
+    # Check for help flag
+    if [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
+        show_config_help
+        exit 0
+    fi
+
+    init_config
+
+    local action="${1:-show}"
+
+    case "$action" in
+        show)
+            echo "Configuration file: $CONFIG_FILE"
+            echo ""
+            if [ -f "$CONFIG_FILE" ]; then
+                cat "$CONFIG_FILE"
+            else
+                echo "Config file does not exist"
+            fi
+            ;;
+        edit)
+            if [ ! -f "$CONFIG_FILE" ]; then
+                echo -e "${YELLOW}Config file does not exist. Creating...${NC}"
+                echo '{"deployments":{}}' > "$CONFIG_FILE"
+            fi
+
+            # Use EDITOR or VISUAL, fallback to common editors
+            local editor="${EDITOR:-${VISUAL:-}}"
+            if [ -z "$editor" ]; then
+                if command -v code &>/dev/null; then
+                    editor="code --wait"
+                elif command -v vim &>/dev/null; then
+                    editor="vim"
+                elif command -v nano &>/dev/null; then
+                    editor="nano"
+                else
+                    editor="vi"
+                fi
+            fi
+
+            echo "Editing: $CONFIG_FILE"
+            echo "Editor: $editor"
+            $editor "$CONFIG_FILE"
+
+            # Validate after edit
+            echo ""
+            if ! jq empty "$CONFIG_FILE" 2>/dev/null; then
+                echo -e "${RED}Warning: Config file has invalid JSON syntax${NC}"
+                echo "Please fix the syntax before using claude-custom."
+                exit 1
+            fi
+
+            echo -e "${GREEN}✓ Config file is valid${NC}"
+            ;;
+        validate)
+            echo "Validating: $CONFIG_FILE"
+            echo ""
+            if [ ! -f "$CONFIG_FILE" ]; then
+                echo -e "${RED}Error: Config file does not exist${NC}"
+                exit 1
+            fi
+
+            if jq empty "$CONFIG_FILE" 2>/dev/null; then
+                echo -e "${GREEN}✓ Config file is valid JSON${NC}"
+
+                local count
+                count=$(jq '.deployments | length' "$CONFIG_FILE")
+                echo "Deployments: $count"
+
+                if [ "$count" -gt 0 ]; then
+                    echo ""
+                    jq -r '.deployments | keys[]' "$CONFIG_FILE" | while read -r name; do
+                        local model
+                        model=$(jq -r ".deployments.\"$name\".model" "$CONFIG_FILE")
+                        echo "  - $name ($model)"
+                    done
+                fi
+            else
+                echo -e "${RED}Error: Config file has invalid JSON syntax${NC}"
+                jq empty "$CONFIG_FILE" 2>&1 | head -5
+                exit 1
+            fi
+            ;;
+        *)
+            echo "Configuration file: $CONFIG_FILE"
+            ;;
+    esac
+}
+
+cmd_test() {
+    # Check for help flag
+    if [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
+        show_test_help
+        exit 0
+    fi
+
+    init_config
+    ensure_jq
+
+    local test_all=false
+    local verbose=false
+    local target_name=""
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --all|-a)
+                test_all=true
+                shift
+                ;;
+            --verbose|-v)
+                verbose=true
+                shift
+                ;;
+            *)
+                if [ -z "$target_name" ]; then
+                    target_name="$1"
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    local count
+    count=$(jq '.deployments | length' "$CONFIG_FILE")
+
+    if [ "$count" -eq 0 ]; then
+        echo -e "${YELLOW}No deployments found${NC}"
+        exit 1
+    fi
+
+    # If no target specified and not testing all, require a name
+    if [ "$test_all" = false ] && [ -z "$target_name" ]; then
+        echo -e "${RED}Error: Specify a deployment name or use --all${NC}"
+        echo ""
+        echo "Usage: claude-custom test <name>"
+        echo "   or: claude-custom test --all"
+        exit 2
+    fi
+
+    local names=()
+    if [ "$test_all" = true ]; then
+        while IFS= read -r name; do
+            names+=("$name")
+        done < <(jq -r '.deployments | keys[]' "$CONFIG_FILE")
+    else
+        target_name=$(get_tool_basename "$(normalize_tool_name "$target_name")")
+        if ! deployment_exists "$target_name"; then
+            echo -e "${RED}Error: Deployment '$target_name' not found${NC}"
+            exit 1
+        fi
+        names+=("$target_name")
+    fi
+
+    echo "Testing deployment(s)..."
+    echo ""
+
+    local passed=0
+    local failed=0
+
+    for name in "${names[@]}"; do
+        local tool_name="claude-$name"
+        local wrapper_path="$BIN_DIR/$tool_name"
+
+        echo -n "Testing $tool_name... "
+
+        if [ ! -f "$wrapper_path" ]; then
+            echo -e "${RED}FAIL${NC}"
+            echo "  Wrapper script not found: $wrapper_path"
+            ((failed++))
+            [ "$verbose" = true ] && echo ""
+            continue
+        fi
+
+        if [ ! -x "$wrapper_path" ]; then
+            echo -e "${RED}FAIL${NC}"
+            echo "  Wrapper script is not executable"
+            ((failed++))
+            [ "$verbose" = true ] && echo ""
+            continue
+        fi
+
+        # Test version command
+        local version
+        version=$("$wrapper_path" --version 2>&1)
+        local exit_code=$?
+
+        if [ $exit_code -eq 0 ]; then
+            echo -e "${GREEN}PASS${NC}"
+            echo "  Version: $version"
+            ((passed++))
+
+            if [ "$verbose" = true ]; then
+                # Show wrapper details
+                local base_url model
+                base_url=$(jq -r ".deployments.\"$name\".base_url" "$CONFIG_FILE")
+                model=$(jq -r ".deployments.\"$name\".model" "$CONFIG_FILE")
+                echo "  Base URL: $base_url"
+                echo "  Model: $model"
+                echo "  Wrapper: $wrapper_path"
+                echo ""
+            fi
+        else
+            echo -e "${RED}FAIL${NC}"
+            echo "  Error: $version"
+            ((failed++))
+            [ "$verbose" = true ] && echo ""
+        fi
+    done
+
+    echo ""
+    echo "Results: $passed passed, $failed failed"
+
+    if [ $failed -gt 0 ]; then
+        exit 1
+    fi
+}
+
+cmd_export() {
+    # Check for help flag
+    if [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
+        show_export_help
+        exit 0
+    fi
+
+    init_config
+    ensure_jq
+
+    local output_file="${1:-}"
+
+    if [ -z "$output_file" ]; then
+        # Output to stdout
+        jq '.' "$CONFIG_FILE"
+    else
+        # Output to file
+        if cp "$CONFIG_FILE" "$output_file" 2>/dev/null; then
+            echo -e "${GREEN}✓ Exported to $output_file${NC}"
+        else
+            echo -e "${RED}Error: Failed to export to $output_file${NC}"
+            exit 1
+        fi
+    fi
+}
+
+cmd_import() {
+    # Check for help flag
+    if [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
+        show_import_help
+        exit 0
+    fi
+
+    init_config
+    ensure_jq
+
+    local merge=false
+    local dry_run=false
+    local input_file=""
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --merge|-m)
+                merge=true
+                shift
+                ;;
+            --dry-run|-n)
+                dry_run=true
+                shift
+                ;;
+            *)
+                if [ -z "$input_file" ]; then
+                    input_file="$1"
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    # Read input
+    local import_data
+    if [ -n "$input_file" ]; then
+        if [ ! -f "$input_file" ]; then
+            echo -e "${RED}Error: File not found: $input_file${NC}"
+            exit 1
+        fi
+        import_data=$(cat "$input_file")
+    else
+        # Read from stdin
+        import_data=$(cat)
+    fi
+
+    # Validate JSON
+    if ! echo "$import_data" | jq empty 2>/dev/null; then
+        echo -e "${RED}Error: Invalid JSON data${NC}"
+        exit 1
+    fi
+
+    # Check for deployments key
+    if ! echo "$import_data" | jq -e '.deployments' >/dev/null 2>&1; then
+        echo -e "${RED}Error: Missing 'deployments' key in import data${NC}"
+        exit 1
+    fi
+
+    local import_count
+    import_count=$(echo "$import_data" | jq '.deployments | length')
+
+    echo "Found $import_count deployment(s) to import"
+    echo ""
+
+    if [ "$dry_run" = true ]; then
+        echo "Deployments to be imported:"
+        echo "$import_data" | jq -r '.deployments | keys[]' | while read -r name; do
+            local model
+            model=$(echo "$import_data" | jq -r ".deployments.\"$name\".model")
+            echo "  - $name ($model)"
+        done
+        echo ""
+        echo "Dry run complete. No changes made."
+        exit 0
+    fi
+
+    # Perform import
+    if [ "$merge" = true ]; then
+        # Merge with existing config
+        echo "Merging with existing configuration..."
+
+        # Get current deployments
+        local current_data
+        current_data=$(cat "$CONFIG_FILE")
+
+        # Merge deployments
+        local merged_data
+        merged_data=$(jq -s '.[0].deployments * .[1].deployments | {deployments: .}' <(echo "$current_data") <(echo "$import_data"))
+
+        if ! echo "$merged_data" > "$CONFIG_FILE.tmp"; then
+            echo -e "${RED}Error: Failed to merge configurations${NC}"
+            rm -f "$CONFIG_FILE.tmp"
+            exit 1
+        fi
+
+        if ! mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"; then
+            echo -e "${RED}Error: Failed to update configuration${NC}"
+            rm -f "$CONFIG_FILE.tmp"
+            exit 1
+        fi
+
+        echo -e "${GREEN}✓ Merged $import_count deployment(s)${NC}"
+    else
+        # Replace entire config
+        echo "Replacing configuration..."
+        if ! echo "$import_data" > "$CONFIG_FILE.tmp"; then
+            echo -e "${RED}Error: Failed to write configuration${NC}"
+            rm -f "$CONFIG_FILE.tmp"
+            exit 1
+        fi
+
+        if ! mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"; then
+            echo -e "${RED}Error: Failed to update configuration${NC}"
+            rm -f "$CONFIG_FILE.tmp"
+            exit 1
+        fi
+
+        echo -e "${GREEN}✓ Imported $import_count deployment(s)${NC}"
+    fi
+
+    echo ""
+    echo "Current deployments:"
+    cmd_list --help 2>/dev/null || echo "  Run 'claude-custom list' to see all deployments"
+}
+
+cmd_doctor() {
+    # Check for help flag
+    if [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
+        show_doctor_help
+        exit 0
+    fi
+
+    echo "Claude Custom Doctor - Diagnosing issues..."
+    echo ""
+
+    local issues=0
+
+    # Check 1: jq installation
+    echo -n "Checking jq installation... "
+    if command -v jq &>/dev/null; then
+        local jq_version
+        jq_version=$(jq --version 2>/dev/null)
+        echo -e "${GREEN}OK${NC} ($jq_version)"
+    else
+        echo -e "${RED}FAIL${NC}"
+        echo "  jq is not installed"
+        echo "  Install with: brew install jq (macOS) or apt-get install jq (Linux)"
+        ((issues++))
+    fi
+
+    # Check 2: Node.js and npm
+    echo -n "Checking Node.js installation... "
+    if command -v node &>/dev/null; then
+        local node_version
+        node_version=$(node --version 2>/dev/null)
+        echo -e "${GREEN}OK${NC} ($node_version)"
+    else
+        echo -e "${YELLOW}WARN${NC}"
+        echo "  Node.js is not installed (required for Claude Code)"
+        ((issues++))
+    fi
+
+    echo -n "Checking npm installation... "
+    if command -v npm &>/dev/null; then
+        local npm_version
+        npm_version=$(npm --version 2>/dev/null)
+        echo -e "${GREEN}OK${NC} ($npm_version)"
+    else
+        echo -e "${YELLOW}WARN${NC}"
+        echo "  npm is not installed (required for Claude Code)"
+        ((issues++))
+    fi
+
+    # Check 3: Claude Code installation
+    echo -n "Checking Claude Code installation... "
+    if [ -f "$CLAUDE_BIN" ]; then
+        local claude_version
+        claude_version=$("$CLAUDE_BIN" --version 2>/dev/null || echo "unknown")
+        echo -e "${GREEN}OK${NC} ($claude_version)"
+    else
+        echo -e "${YELLOW}WARN${NC}"
+        echo "  Claude Code is not installed"
+        echo "  Run: cd ~/claude-model && npm install @anthropic-ai/claude-code"
+        ((issues++))
+    fi
+
+    # Check 4: Config directory
+    echo -n "Checking config directory... "
+    if [ -d "$CONFIG_DIR" ]; then
+        echo -e "${GREEN}OK${NC} ($CONFIG_DIR)"
+    else
+        echo -e "${YELLOW}WARN${NC}"
+        echo "  Config directory does not exist (will be created on first use)"
+    fi
+
+    # Check 5: Config file validity
+    echo -n "Checking config file validity... "
+    if [ -f "$CONFIG_FILE" ]; then
+        if jq empty "$CONFIG_FILE" 2>/dev/null; then
+            echo -e "${GREEN}OK${NC}"
+        else
+            echo -e "${RED}FAIL${NC}"
+            echo "  Config file has invalid JSON"
+            echo "  Run: claude-custom config validate"
+            ((issues++))
+        fi
+    else
+        echo -e "${YELLOW}WARN${NC}"
+        echo "  Config file does not exist"
+    fi
+
+    # Check 6: PATH configuration
+    echo -n "Checking PATH configuration... "
+    if echo "$PATH" | grep -q "$HOME/claude-model/bin"; then
+        echo -e "${GREEN}OK${NC}"
+    else
+        echo -e "${YELLOW}WARN${NC}"
+        echo "  ~/claude-model/bin is not in PATH"
+        echo "  Add it: export PATH=\"\$HOME/claude-model/bin:\$PATH\""
+        ((issues++))
+    fi
+
+    # Check 7: Deployment wrappers
+    echo -n "Checking deployment wrappers... "
+    local wrapper_count=0
+    local broken_wrappers=0
+    if [ -d "$BIN_DIR" ]; then
+        while IFS= read -r wrapper; do
+            ((wrapper_count++))
+            if [ ! -x "$wrapper" ]; then
+                ((broken_wrappers++))
+            fi
+        done < <(find "$BIN_DIR" -name "claude-*" -type f 2>/dev/null)
+    fi
+
+    if [ $wrapper_count -gt 0 ]; then
+        if [ $broken_wrappers -eq 0 ]; then
+            echo -e "${GREEN}OK${NC} ($wrapper_count wrappers)"
+        else
+            echo -e "${YELLOW}WARN${NC} ($wrapper_count wrappers, $broken_wrappers broken)"
+            echo "  Run: chmod +x ~/claude-model/bin/claude-*"
+            ((issues++))
+        fi
+    else
+        echo -e "${YELLOW}WARN${NC}"
+        echo "  No deployment wrappers found"
+    fi
+
+    # Check 8: Network connectivity (optional)
+    echo -n "Checking GitHub connectivity... "
+    if curl -fsSL --connect-timeout 5 "https://api.github.com" >/dev/null 2>&1; then
+        echo -e "${GREEN}OK${NC}"
+    else
+        echo -e "${YELLOW}WARN${NC}"
+        echo "  Cannot reach GitHub (self-update may not work)"
+        ((issues++))
+    fi
+
+    # Summary
+    echo ""
+    echo "Diagnosis complete."
+    if [ $issues -eq 0 ]; then
+        echo -e "${GREEN}No issues found!${NC}"
+    else
+        echo -e "${YELLOW}Found $issues issue(s)${NC}"
+    fi
+}
+
+cmd_uninstall() {
+    # Check for help flag
+    if [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
+        show_uninstall_help
+        exit 0
+    fi
+
+    local remove_all=false
+    local force=false
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --all|-a)
+                remove_all=true
+                shift
+                ;;
+            --force|-f)
+                force=true
+                shift
+                ;;
+            *)
+                echo -e "${RED}Unknown option: $1${NC}"
+                exit 2
+                ;;
+        esac
+    done
+
+    echo "This will remove claude-custom."
+    echo ""
+
+    if [ "$remove_all" = true ]; then
+        echo "The following will be removed:"
+        echo "  - All deployment wrappers in $BIN_DIR"
+        echo "  - Configuration in $CONFIG_DIR"
+        echo "  - Claude Code installation in $CLAUDE_MODEL_DIR"
+        echo ""
+    fi
+
+    # Check for sudo if installed system-wide
+    local script_path="$0"
+    if [[ "$script_path" == "/usr/local/bin/claude-custom" ]]; then
+        if [ "$EUID" -ne 0 ]; then
+            echo -e "${YELLOW}Note: claude-custom is installed system-wide${NC}"
+            echo "Re-run with sudo to remove: sudo claude-custom uninstall"
+            exit 1
+        fi
+        echo "Will remove: /usr/local/bin/claude-custom"
+    fi
+
+    # Confirm
+    if [ "$force" = false ]; then
+        read -p "Continue? (y/n) " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo "Aborted."
+            exit 0
+        fi
+    fi
+
+    echo ""
+    echo "Uninstalling..."
+
+    # Remove all deployments if requested
+    if [ "$remove_all" = true ]; then
+        echo "Removing deployment wrappers..."
+        if [ -d "$BIN_DIR" ]; then
+            rm -f "$BIN_DIR"/claude-* 2>/dev/null
+            echo -e "${GREEN}✓ Removed wrappers${NC}"
+        fi
+
+        echo "Removing configuration..."
+        if [ -d "$CONFIG_DIR" ]; then
+            rm -rf "$CONFIG_DIR" 2>/dev/null
+            echo -e "${GREEN}✓ Removed configuration${NC}"
+        fi
+
+        echo "Removing Claude Code installation..."
+        if [ -d "$CLAUDE_MODEL_DIR" ]; then
+            rm -rf "$CLAUDE_MODEL_DIR" 2>/dev/null
+            echo -e "${GREEN}✓ Removed Claude Code${NC}"
+        fi
+    else
+        # Just remove config
+        echo "Removing configuration..."
+        if [ -d "$CONFIG_DIR" ]; then
+            rm -rf "$CONFIG_DIR" 2>/dev/null
+            echo -e "${GREEN}✓ Removed configuration${NC}"
+        fi
+    fi
+
+    # Remove the script itself if installed system-wide
+    if [[ "$script_path" == "/usr/local/bin/claude-custom" ]]; then
+        echo "Removing claude-custom script..."
+        rm -f "/usr/local/bin/claude-custom" 2>/dev/null
+        echo -e "${GREEN}✓ Removed claude-custom script${NC}"
+    fi
+
+    echo ""
+    echo -e "${GREEN}Uninstallation complete!${NC}"
+    echo ""
+    echo "Note: You may need to remove the PATH configuration from your shell profile:"
+    echo "  ~/.zshrc or ~/.bashrc"
+    echo ""
+    echo "Look for lines containing: claude-model/bin"
 }
 
 # Run main
