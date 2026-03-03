@@ -159,10 +159,10 @@ configure_path() {
             ;;
     esac
 
-    local path_line='export PATH="$HOME/claude-model/bin:$PATH"'
+    local path_line='export PATH="$HOME/.claude-custom:$HOME/claude-model/bin:$PATH"'
 
     if [ "$detected_shell" = "fish" ]; then
-        path_line='set -gx PATH $HOME/claude-model/bin $PATH'
+        path_line='set -gx PATH $HOME/.claude-custom $HOME/claude-model/bin $PATH'
         mkdir -p "$(dirname "$shell_rc")"
     fi
 
@@ -646,8 +646,8 @@ cmd_add() {
     # Create tool config directory
     mkdir -p "$CLAUDE_MODEL_DIR/.$tool_name"
 
-    # Create 'claude' alias script in current directory
-    local claude_script="./claude"
+    # Create 'claude' alias script in ~/.claude-custom/
+    local claude_script="$CONFIG_DIR/claude"
     cat > "$claude_script" << EOF
 #!/usr/bin/env bash
 # Wrapper for $tool_name deployment
@@ -658,9 +658,9 @@ EOF
     chmod +x "$claude_script"
 
     echo -e "${GREEN}✓ Added $tool_name${NC}"
-    echo "  Created ./claude → $tool_name"
-    echo "  Run: source ~/.zshrc  # or your shell config"
-    echo "  Use: ./claude or $tool_name"
+    echo "  Created ~/.claude-custom/claude → $tool_name"
+    echo "  Add to PATH: export PATH=\"\$HOME/.claude-custom:\$PATH\""
+    echo "  Use: claude or $tool_name"
 }
 
 cmd_remove() {
@@ -731,9 +731,9 @@ cmd_remove() {
     # Remove 'claude' script if this was the last deployment
     local remaining_count
     remaining_count=$(jq '.deployments | length' "$CONFIG_FILE")
-    if [ "$remaining_count" -eq 0 ] && [ -f "./claude" ]; then
-        rm -f "./claude"
-        echo -e "${GREEN}✓ Removed ./claude alias${NC}"
+    if [ "$remaining_count" -eq 0 ] && [ -f "$CONFIG_DIR/claude" ]; then
+        rm -f "$CONFIG_DIR/claude"
+        echo -e "${GREEN}✓ Removed ~/.claude-custom/claude${NC}"
     fi
 
     echo -e "${GREEN}✓ Removed $tool_name${NC}"
@@ -921,8 +921,8 @@ cmd_update() {
     # Rewrite wrapper script
     write_wrapper_script "$tool_name" "$new_api_key" "$new_base_url" "$new_model"
 
-    # Update 'claude' alias script in current directory if it exists
-    local claude_script="./claude"
+    # Update 'claude' alias script in ~/.claude-custom/ if it exists
+    local claude_script="$CONFIG_DIR/claude"
     if [ -f "$claude_script" ]; then
         cat > "$claude_script" << EOF
 #!/usr/bin/env bash
