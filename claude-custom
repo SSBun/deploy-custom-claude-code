@@ -234,6 +234,9 @@ main() {
         update)
             cmd_update "$@"
             ;;
+        upgrade)
+            cmd_upgrade "$@"
+            ;;
         --help|-h|"")
             show_help
             ;;
@@ -258,7 +261,8 @@ Commands:
   add      Add a new custom model deployment
   remove   Remove a deployment
   list     List all deployments
-  update   Update a deployment
+  update   Update a deployment configuration
+  upgrade  Upgrade Claude Code to latest version
 
 Options:
   --help, -h     Show this help message
@@ -331,6 +335,25 @@ Options:
 Examples:
   claude-custom update doubao --model glm-4-6
   claude-custom update glm --api-key sk-new-key
+EOF
+}
+
+show_upgrade_help() {
+    cat << EOF
+Upgrade Claude Code
+
+Usage: claude-custom upgrade [name]
+
+Arguments:
+  <name>                  (Optional) Name of deployment to check after upgrade
+
+Options:
+  --latest, -l            Install latest version (npm install @anthropic-ai/claude-code@latest)
+
+Examples:
+  claude-custom upgrade
+  claude-custom upgrade --latest
+  claude-custom upgrade doubao
 EOF
 }
 
@@ -725,6 +748,138 @@ cmd_update() {
     write_wrapper_script "$tool_name" "$new_api_key" "$new_base_url" "$new_model"
 
     echo -e "${GREEN}✓ Updated $tool_name${NC}"
+}
+
+cmd_upgrade() {
+    # Check for help flag
+    if [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
+        show_upgrade_help
+        exit 0
+    fi
+
+    local check_name=""
+    local install_latest=false
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --latest|-l)
+                install_latest=true
+                shift
+                ;;
+            *)
+                if [ -z "$check_name" ]; then
+                    check_name="$1"
+                else
+                    echo -e "${RED}Unknown option: $1${NC}"
+                    exit 2
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    init_config
+
+    # Check if we have deployments
+    local count
+    count=$(jq '.deployments | length' "$CONFIG_FILE" 2>/dev/null || echo "0")
+
+    if [ "$count" -eq 0 ]; then
+        echo -e "${YELLOW}No deployments found${NC}"
+        echo ""
+        echo "Add a deployment first with:"
+        echo "  claude-custom add <name>"
+        exit 1
+    fi
+
+    echo "Upgrading Claude Code..."
+    echo ""
+
+    # Get current version before upgrade
+    local old_version="unknown"
+    if [ -f "$CLAUDE_BIN" ]; then
+        old_version=$("$CLAUDE_BIN" --version 2>/dev/null || echo "unknown")
+    fi
+
+    echo "Current version: $old_version"
+    echo ""
+
+    # Change to the claude-model directory
+    if ! cd "$CLAUDE_MODEL_DIR" 2>/dev/null; then
+        echo -e "${RED}Error: Claude Code directory not found: $CLAUDE_MODEL_DIR${NC}"
+        exit 1
+    fi
+
+    # Run npm install to upgrade
+    echo "Running: npm install @anthropic-ai/claude-code${install_latest:+@latest}..."
+    echo ""
+
+    if ! npm install @anthropic-ai/claude-code${install_latest:+@latest} 2>&1; then
+        echo ""
+        echo -e "${RED}Error: Failed to upgrade Claude Code${NC}"
+        exit 1
+    fi
+
+    echo ""
+    echo -e "${GREEN}✓ Claude Code upgraded successfully${NC}"
+
+    # Get new version
+    local new_version
+    new_version=$("$CLAUDE_BIN" --version 2>/dev/null || echo "unknown")
+
+    echo ""
+    echo "Old version: $old_version"
+    echo "New version: $new_version"
+    echo ""
+
+    # Check specific deployment if requested
+    if [ -n "$check_name" ]; then
+        check_name=$(normalize_tool_name "$check_name")
+        local basename
+        basename=$(get_tool_basename "$check_name")
+
+        if ! deployment_exists "$basename"; then
+            echo -e "${YELLOW}Warning: Deployment '$check_name' not found${NC}"
+        else
+            echo "Testing $check_name..."
+            if "$BIN_DIR/$check_name" --version >/dev/null 2>&1; then
+                echo -e "${GREEN}✓ $check_name is working correctly${NC}"
+            else
+                echo -e "${YELLOW}Warning: $check_name may have issues${NC}"
+            fi
+        fi
+    fi
+
+    # Show all deployments with their versions
+    echo ""
+    echo "All deployments:"
+    echo ""
+    printf "  %-20s %-15s\n" "NAME" "VERSION"
+    echo "  ──────────────────── ─────────────"
+
+    local names=()
+    while IFS= read -r name; do
+        names+=("$name")
+    done < <(jq -r '.deployments | keys[]' "$CONFIG_FILE")
+
+    for name in "${names[@]}"; do
+        local tool_name="claude-$name"
+        local wrapper_path="$BIN_DIR/$tool_name"
+        local version="N/A"
+
+        if [ -f "$wrapper_path" ]; then
+            version=$("$wrapper_path" --version 2>/dev/null || echo "N/A")
+            if [[ "$version" =~ [0-9]+\.[0-9]+\.[0-9]+ ]]; then
+                version="${BASH_REMATCH[0]}"
+            fi
+        fi
+
+        printf "  %-20s %-15s\n" "$name" "$version"
+    done
+
+    echo ""
+    echo "Total: $count deployment(s)"
 }
 
 # Run main
