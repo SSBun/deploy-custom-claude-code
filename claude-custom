@@ -423,7 +423,7 @@ cmd_list() {
 
     echo "Deployed Models:"
     echo ""
-    printf "  %-20s %-40s %s\n" "NAME" "BASE URL" "MODEL"
+    printf "  %-20s %-40s %-30s\n" "NAME" "BASE URL" "MODEL"
     echo "  ──────────────────── ──────────────────────────────────────── ─────────────────"
 
     jq -r '.deployments | to_entries[] | @text "  \(.key |.[0:20]) \(.value.base_url |.[0:40]) \(.value.model |.[0:30])"' "$CONFIG_FILE" | while read -r line; do
