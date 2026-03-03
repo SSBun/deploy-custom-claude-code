@@ -221,6 +221,8 @@ main() {
     local command="$1"
     shift || true
 
+    first_run_check "$command"
+
     case "$command" in
         add)
             cmd_add "$@"
@@ -274,6 +276,34 @@ EOF
 
 show_version() {
     echo "claude-custom $VERSION"
+}
+
+first_run_check() {
+    # Only check for non-help commands
+    if [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]] || [[ "$1" == "--version" ]] || [[ "$1" == "-v" ]]; then
+        return
+    fi
+
+    init_config
+    ensure_jq
+
+    # Check if config is empty
+    local count=$(jq '.deployments | length' "$CONFIG_FILE")
+    if [ "$count" -gt 0 ]; then
+        return  # Already has deployments
+    fi
+
+    # Check for existing wrappers
+    if [ -d "$BIN_DIR" ]; then
+        local wrapper_count=$(find "$BIN_DIR" -name "claude-*" -type f 2>/dev/null | wc -l)
+        if [ "$wrapper_count" -gt 0 ]; then
+            echo ""
+            echo -e "${YELLOW}No claude-custom configuration found, but $wrapper_count existing deployment(s) detected.${NC}"
+            echo ""
+            echo "Run 'claude-custom migrate' to import your existing deployments."
+            echo ""
+        fi
+    fi
 }
 
 # Command implementations
