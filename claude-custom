@@ -5,7 +5,7 @@
 set -e  # Exit on error
 
 # Version
-VERSION="1.0.1"
+VERSION="1.0.2"
 
 # Configuration
 CONFIG_DIR="$HOME/.claude-custom"
@@ -444,11 +444,13 @@ Arguments:
 Options:
   --all, -a               Test all deployments
   --verbose, -v           Show detailed output
+  --api, -c               Test API connectivity (sends test message)
 
 Examples:
   claude-custom test zenmux
   claude-custom test --all
   claude-custom test --all --verbose
+  claude-custom test zenmux --api
 EOF
 }
 
@@ -1331,6 +1333,7 @@ cmd_test() {
 
     local test_all=false
     local verbose=false
+    local test_api=false
     local target_name=""
 
     # Parse arguments
@@ -1342,6 +1345,10 @@ cmd_test() {
                 ;;
             --verbose|-v)
                 verbose=true
+                shift
+                ;;
+            --api|-c)
+                test_api=true
                 shift
                 ;;
             *)
@@ -1412,14 +1419,88 @@ cmd_test() {
             continue
         fi
 
-        # Test version command
-        local version
-        version=$("$wrapper_path" --version 2>&1)
-        local exit_code=$?
+        # Get version
+        local version="N/A"
+        version=$("$wrapper_path" --version 2>/dev/null || echo "N/A")
+        if [[ "$version" =~ [0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            version="${BASH_REMATCH[0]}"
+        fi
 
-        if [ $exit_code -eq 0 ]; then
+        # Test API connectivity if requested
+        if [ "$test_api" = true ]; then
+            local api_key base_url model
+            api_key=$(jq -r ".deployments.\"$name\".api_key" "$CONFIG_FILE")
+            base_url=$(jq -r ".deployments.\"$name\".base_url" "$CONFIG_FILE")
+            model=$(jq -r ".deployments.\"$name\".model" "$CONFIG_FILE")
+
+            echo -n "API... "
+
+            # Quick connectivity test using curl
+            local api_url="${base_url%/}/v1/messages"
+            local api_result
+            api_result=$(curl -s -X POST "$api_url" \
+                -H "x-api-key: $api_key" \
+                -H "anthropic-version: 2023-06-01" \
+                -H "content-type: application/json" \
+                -d '{
+                    "model": "'"$model"'",
+                    "max_tokens": 10,
+                    "messages": [{"role": "user", "content": "hi"}]
+                }' \
+                --max-time 10 2>&1)
+            local curl_exit=$?
+
+            if [ $curl_exit -ne 0 ]; then
+                # Curl failed to connect
+                echo -e "${RED}FAIL${NC}"
+                echo "  Version: $version"
+                echo "  API: ${RED}Connection failed${NC}"
+                if [ "$verbose" = true ]; then
+                    echo "  Error: $api_result"
+                fi
+                ((failed++))
+            elif ! echo "$api_result" | jq empty >/dev/null 2>&1; then
+                # Response is not valid JSON
+                echo -e "${RED}FAIL${NC}"
+                echo "  Version: $version"
+                echo "  API: ${RED}Invalid response${NC}"
+                if [ "$verbose" = true ]; then
+                    echo "  Response: $api_result"
+                fi
+                ((failed++))
+            elif echo "$api_result" | jq -e '.error' >/dev/null 2>&1; then
+                # API returned an error
+                local error_type
+                error_type=$(echo "$api_result" | jq -r '.error.type // .error' 2>/dev/null)
+                if [[ "$error_type" == *"authentication"* ]] || [[ "$error_type" == *"auth"* ]]; then
+                    echo -e "${RED}FAIL${NC}"
+                    echo "  Version: $version"
+                    echo "  API: ${RED}Auth Error${NC} (check API key)"
+                    ((failed++))
+                else
+                    echo -e "${YELLOW}WARN${NC}"
+                    echo "  Version: $version"
+                    echo "  API: ${YELLOW}API Error ($error_type)${NC}"
+                    ((failed++))
+                fi
+            else
+                # Success!
+                echo -e "${GREEN}PASS${NC}"
+                echo "  Version: $version"
+                echo "  API: ${GREEN}Connected${NC}"
+                ((passed++))
+            fi
+
+            if [ "$verbose" = true ]; then
+                echo "  Base URL: $base_url"
+                echo "  Model: $model"
+                echo "  Wrapper: $wrapper_path"
+                echo ""
+            fi
+        else
             echo -e "${GREEN}PASS${NC}"
             echo "  Version: $version"
+            echo "  API: Skipped (use --api to test)"
             ((passed++))
 
             if [ "$verbose" = true ]; then
@@ -1432,11 +1513,6 @@ cmd_test() {
                 echo "  Wrapper: $wrapper_path"
                 echo ""
             fi
-        else
-            echo -e "${RED}FAIL${NC}"
-            echo "  Error: $version"
-            ((failed++))
-            [ "$verbose" = true ] && echo ""
         fi
     done
 
