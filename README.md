@@ -42,8 +42,33 @@ claude-custom update <name> [--api-key KEY] [--base-url URL] [--model MODEL]
 # Remove a deployment
 claude-custom remove <name>
 
-# Show configuration location
-claude-custom config
+# Test deployment functionality
+claude-custom test <name>
+claude-custom test --all
+
+# Upgrade Claude Code
+claude-custom upgrade
+
+# Configuration management
+claude-custom config           # Show config location
+claude-custom config show      # Show config contents
+claude-custom config edit      # Edit config file
+claude-custom config validate  # Validate config syntax
+
+# Export/Import deployments
+claude-custom export [file]                    # Export to file or stdout
+claude-custom import [file]                    # Import from file or stdin
+claude-custom import backup.json --merge       # Merge with existing config
+
+# Diagnose issues
+claude-custom doctor
+
+# Uninstall
+claude-custom uninstall          # Remove config only
+claude-custom uninstall --all    # Remove everything
+
+# Update claude-custom itself
+claude-custom self-update
 ```
 
 ### Examples
@@ -55,13 +80,31 @@ claude-custom add doubao
 # Non-interactive add
 claude-custom add glm --api-key YOUR_KEY --base-url https://open.bigmodel.cn/api/paas/v4 --model glm-4-6
 
-# List all
+# List all deployments with versions
 claude-custom list
+
+# Test a specific deployment
+claude-custom test doubao
+
+# Test all deployments
+claude-custom test --all
 
 # Update API key
 claude-custom update doubao --api-key NEW_KEY
 
-# Remove
+# Export configuration
+claude-custom export > backup.json
+
+# Import configuration
+claude-custom import backup.json
+
+# Merge with existing config
+claude-custom import backup.json --merge
+
+# Diagnose issues
+claude-custom doctor
+
+# Remove deployment
 claude-custom remove glm
 ```
 
@@ -73,6 +116,10 @@ claude-custom remove glm
 - 🐚 **Smart Shell Detection**: Automatically detects and configures your shell (zsh, bash, fish)
 - ✅ **Validation**: Ensures tool names follow `claude-xxx` naming convention
 - 📝 **Interactive & Non-Interactive**: Supports both interactive prompts and command-line arguments
+- 🧪 **Testing**: Verify deployments work with the `test` command
+- 💾 **Backup/Restore**: Export and import deployment configurations
+- 🔍 **Diagnostics**: Troubleshoot issues with the `doctor` command
+- 🔄 **Self-Update**: Update claude-custom from GitHub with one command
 
 ## Alternative: Direct Deployment Script
 
@@ -252,6 +299,22 @@ After deployment:
 
 ## Troubleshooting
 
+### Run diagnostics
+
+Use the `doctor` command to diagnose common issues:
+
+```bash
+claude-custom doctor
+```
+
+This will check:
+- jq, Node.js, and npm installations
+- Claude Code installation
+- Config file validity
+- PATH configuration
+- Deployment wrapper scripts
+- Network connectivity
+
 ### claude-custom command not found
 
 ```bash
@@ -261,14 +324,31 @@ source ~/.zshrc  # or ~/.bashrc, ~/.bash_profile
 # Or restart your terminal
 ```
 
-### Migration issues
+### Test deployment functionality
+
+```bash
+# Test a specific deployment
+claude-custom test doubao
+
+# Test all deployments
+claude-custom test --all
+```
 
 ### Configuration location
 
-Advanced users can directly edit the configuration file:
+View or edit configuration:
 ```bash
-# Config location
-~/.claude-custom/config.json
+# Show config location
+claude-custom config
+
+# Show config contents
+claude-custom config show
+
+# Edit config file
+claude-custom config edit
+
+# Validate config syntax
+claude-custom config validate
 ```
 
 ### Legacy script troubleshooting
