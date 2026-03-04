@@ -4,6 +4,20 @@ A generic deployment script for setting up Claude Code with custom Claude-compat
 
 **[中文文档](README.zh-CN.md)**
 
+## Features
+
+- 🚀 **Easy Deployment**: Deploy custom Claude-compatible models in minutes
+- 🔧 **Generic & Flexible**: Works with any Claude-compatible API
+- 🎯 **Multiple Models**: Deploy multiple models simultaneously (e.g., `claude-doubao`, `claude-glm`, `claude-kimi`)
+- 🔄 **Multi-Model Support**: Each deployment can have multiple models with runtime selection
+- 🐚 **Smart Shell Detection**: Automatically detects and configures your shell (zsh, bash, fish)
+- ✅ **Validation**: Ensures tool names follow `claude-xxx` naming convention
+- 📝 **Interactive & Non-Interactive**: Supports both interactive prompts and command-line arguments
+- 🧪 **Testing**: Verify deployments work with the `test` command
+- 💾 **Backup/Restore**: Export and import deployment configurations
+- 🔍 **Diagnostics**: Troubleshoot issues with the `doctor` command
+- 🔄 **Self-Update**: Update claude-custom from GitHub with one command
+
 ## Quick Start
 
 ### Option 1: Using claude-custom (Recommended)
@@ -160,20 +174,6 @@ claude-custom doctor
 # Remove deployment
 claude-custom remove glm
 ```
-
-## Features
-
-- 🚀 **Easy Deployment**: Deploy custom Claude-compatible models in minutes
-- 🔧 **Generic & Flexible**: Works with any Claude-compatible API
-- 🎯 **Multiple Models**: Deploy multiple models simultaneously (e.g., `claude-doubao`, `claude-glm`, `claude-kimi`)
-- 🔄 **Multi-Model Support**: Each deployment can have multiple models with runtime selection
-- 🐚 **Smart Shell Detection**: Automatically detects and configures your shell (zsh, bash, fish)
-- ✅ **Validation**: Ensures tool names follow `claude-xxx` naming convention
-- 📝 **Interactive & Non-Interactive**: Supports both interactive prompts and command-line arguments
-- 🧪 **Testing**: Verify deployments work with the `test` command
-- 💾 **Backup/Restore**: Export and import deployment configurations
-- 🔍 **Diagnostics**: Troubleshoot issues with the `doctor` command
-- 🔄 **Self-Update**: Update claude-custom from GitHub with one command
 
 ## Alternative: Direct Deployment Script
 
