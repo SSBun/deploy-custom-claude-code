@@ -36,7 +36,7 @@ _claude_complete() {
     fi
 
     # Standard options
-    local opts="--use-model --help"
+    local opts="--use-model -m --help -h"
     COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
 }
 

@@ -244,6 +244,7 @@ write_wrapper_script() {
     local default_model="$4"
 
     local script_path="$BIN_DIR/$tool_name"
+    local basename="${tool_name#claude-}"
 
     cat > "$script_path" << WRAPPER_EOF
 #!/usr/bin/env bash
@@ -253,6 +254,41 @@ write_wrapper_script() {
 # Default Model: $default_model
 
 CLAUDE_BIN="\$HOME/claude-model/node_modules/.bin/claude"
+CONFIG_FILE="\$HOME/.claude-custom/config.json"
+
+# Function to show usage
+show_usage() {
+    echo "Usage: $tool_name [OPTIONS] [--] [claude args...]"
+    echo ""
+    echo "Options:"
+    echo "  --use-model, -m [MODEL]  Use specified model (shows available models if MODEL omitted)"
+    echo "  --help, -h               Show this help message"
+    echo ""
+    echo "Environment:"
+    echo "  CLAUDE_MODEL            Override model selection"
+    echo ""
+    echo -n "Default model: $default_model"
+    echo ""
+    echo "Available models:"
+    show_available_models
+}
+
+# Function to show available models
+show_available_models() {
+    if command -v jq >/dev/null 2>&1 && [[ -f "\$CONFIG_FILE" ]]; then
+        local models
+        models=\$(jq -r --arg name "$basename" '.deployments[\$name].models[]? // .deployments[\$name].model // empty' "\$CONFIG_FILE" 2>/dev/null)
+        if [[ -n "\$models" ]]; then
+            echo "\$models" | while read -r model; do
+                [[ -n "\$model" ]] && echo "  - \$model"
+            done
+        else
+            echo "  $default_model"
+        fi
+    else
+        echo "  $default_model"
+    fi
+}
 
 # Check if Claude Code is installed
 if [ ! -f "\$CLAUDE_BIN" ]; then
@@ -268,14 +304,19 @@ CLEANED_ARGS=()
 
 while [[ \$# -gt 0 ]]; do
     case "\$1" in
-        --use-model)
+        --use-model|-m)
             if [[ -n "\$2" && ! "\$2" =~ ^- ]]; then
                 SELECTED_MODEL="\$2"
                 shift 2
             else
-                echo "Error: --use-model requires a model name" >&2
-                exit 1
+                # No model name provided, show available models
+                show_available_models
+                exit 0
             fi
+            ;;
+        --help|-h)
+            show_usage
+            exit 0
             ;;
         *)
             CLEANED_ARGS+=("\$1")
@@ -854,6 +895,8 @@ EOF
         echo ""
         echo -e "${GREEN}Use with specific model:${NC}"
         echo "  ~/.claude-custom/claude --use-model <model> <args>"
+        echo "  ~/.claude-custom/claude -m <model> <args>"
+        echo "  ~/.claude-custom/claude --use-model  # Show available models"
         echo ""
     fi
     echo -e "${GREEN}Use right now:${NC}"
@@ -1259,6 +1302,9 @@ cmd_models() {
         echo ""
         echo "Use with:"
         echo "  $tool_name --use-model <model> <args>"
+        echo "  $tool_name -m <model> <args>"
+        echo "  $tool_name --use-model  # Show available models"
+        echo "  $tool_name --help       # Show usage information"
         echo ""
         echo "Manage models:"
         echo "  claude-custom models $basename --default <name>"
