@@ -18,7 +18,7 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Default configuration
-CLAUDE_MODEL_DIR="$HOME/claude-model"
+CLAUDE_MODEL_DIR="$HOME/.claude-model"
 BIN_DIR="$CLAUDE_MODEL_DIR/bin"
 CONFIG_DIR_BASE="$CLAUDE_MODEL_DIR"
 
@@ -331,6 +331,15 @@ echo -e "\n${YELLOW}Step 3: Creating config directory...${NC}"
 mkdir -p "$CONFIG_DIR"
 echo -e "${GREEN}✓ Created config directory: $CONFIG_DIR${NC}"
 
+# Step 3b: Link skills folder
+echo -e "\n${YELLOW}Step 3b: Linking skills folder...${NC}"
+if [ -d "$HOME/.claude/skills" ]; then
+    ln -sf "$HOME/.claude/skills" "$CONFIG_DIR/skills"
+    echo -e "${GREEN}✓ Linked skills from ~/.claude/skills${NC}"
+else
+    echo -e "${YELLOW}⚠ No skills folder found at ~/.claude/skills, skipping${NC}"
+fi
+
 # Step 4: Create bin directory
 echo -e "\n${YELLOW}Step 4: Creating bin directory...${NC}"
 mkdir -p "$BIN_DIR"
@@ -347,7 +356,7 @@ cat > "$SCRIPT_PATH" << SCRIPT_EOF
 # Tool: $TOOL_NAME
 # Model: $MODEL_NAME
 
-CLAUDE_BIN="\$HOME/claude-model/node_modules/.bin/claude"
+CLAUDE_BIN="\$HOME/.claude-model/node_modules/.bin/claude"
 
 # Check if Claude Code is installed
 if [ ! -f "\$CLAUDE_BIN" ]; then
@@ -363,7 +372,7 @@ export ANTHROPIC_MODEL="MODEL_NAME_PLACEHOLDER"
 export API_TIMEOUT_MS=TIMEOUT_PLACEHOLDER
 
 # Keep a separate config dir for this tool
-export CLAUDE_CONFIG_DIR="\$HOME/claude-model/.$TOOL_NAME"
+export CLAUDE_CONFIG_DIR="\$HOME/.claude-model/.$TOOL_NAME"
 
 exec "\$CLAUDE_BIN" "\$@"
 SCRIPT_EOF
@@ -481,12 +490,12 @@ fi
 
 # Add PATH configuration (different syntax for fish shell)
 if [ "$DETECTED_SHELL" = "fish" ]; then
-    PATH_LINE="set -gx PATH \$HOME/claude-model/bin \$PATH"
+    PATH_LINE="set -gx PATH \$HOME/.claude-model/bin \$PATH"
 else
-    PATH_LINE="export PATH=\"\$HOME/claude-model/bin:\$PATH\""
+    PATH_LINE="export PATH=\"\$HOME/.claude-model/bin:\$PATH\""
 fi
 
-if grep -q "claude-model/bin" "$SHELL_RC" 2>/dev/null; then
+if grep -q ".claude-model/bin" "$SHELL_RC" 2>/dev/null; then
     echo -e "${GREEN}✓ PATH already configured in $SHELL_RC${NC}"
 else
     # Create directory for fish config if needed
