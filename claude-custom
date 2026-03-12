@@ -5,13 +5,14 @@
 set -e  # Exit on error
 
 # Version
-VERSION="1.0.8"
+VERSION="1.0.9"
 
 # Configuration
 CONFIG_DIR="$HOME/.claude-custom"
 CONFIG_FILE="$CONFIG_DIR/config.json"
-CLAUDE_MODEL_DIR="$HOME/.claude-model"
 BIN_DIR="$CONFIG_DIR/bin"
+CLAUDE_CODE_DIR="$CONFIG_DIR/packages"  # npm packages directory (avoid dot in name)
+CLAUDE_BIN="$CLAUDE_CODE_DIR/node_modules/.bin/claude"  # Claude Code binary path
 
 # Colors for output
 RED=$'\033[0;31m'
@@ -148,12 +149,12 @@ migrate_deployment_to_multi() {
 
 # Ensure Claude Code is installed
 ensure_claude_code() {
-    if [ ! -f "$CLAUDE_MODEL_DIR/node_modules/.bin/claude" ]; then
+    if [ ! -f "$CLAUDE_CODE_DIR/node_modules/.bin/claude" ]; then
         echo -e "${YELLOW}Claude Code not found. Installing...${NC}"
-        mkdir -p "$CLAUDE_MODEL_DIR"
+        mkdir -p "$CLAUDE_CODE_DIR"
 
         local original_dir="$(pwd)"
-        cd "$CLAUDE_MODEL_DIR"
+        cd "$CLAUDE_CODE_DIR"
 
         if [ ! -f "package.json" ]; then
             npm init -y > /dev/null 2>&1
@@ -215,12 +216,12 @@ configure_path() {
     [ ! -f "$shell_rc" ] && touch "$shell_rc"
 
     # Check for old PATH entry and replace it, or add new one
-    if grep -q ".claude-model/bin" "$shell_rc" 2>/dev/null; then
+    if grep -q ".claude-custom/bin" "$shell_rc" 2>/dev/null; then
         # Replace old PATH entry with new one
         if [[ "$OSTYPE" == "darwin"* ]]; then
-            sed -i '' '/\.claude-model\/bin/d' "$shell_rc"
+            sed -i '' '/\.claude-custom\/bin/d' "$shell_rc"
         else
-            sed -i '/\.claude-model\/bin/d' "$shell_rc"
+            sed -i '/\.claude-custom\/bin/d' "$shell_rc"
         fi
         echo "" >> "$shell_rc"
         echo "# Claude Custom Models" >> "$shell_rc"
@@ -253,7 +254,7 @@ write_wrapper_script() {
 # Tool: $tool_name
 # Default Model: $default_model
 
-CLAUDE_BIN="\$HOME/.claude-model/node_modules/.bin/claude"
+CLAUDE_BIN="\$HOME/.claude-custom/packages/node_modules/.bin/claude"
 CONFIG_FILE="\$HOME/.claude-custom/config.json"
 
 # Function to show usage
@@ -336,7 +337,7 @@ export ANTHROPIC_BASE_URL="$base_url"
 export ANTHROPIC_MODEL="\$SELECTED_MODEL"
 
 # Keep a separate config dir for this tool
-export CLAUDE_CONFIG_DIR="\$HOME/.claude-model/.$tool_name"
+export CLAUDE_CONFIG_DIR="\$HOME/.claude-custom/.$tool_name"
 
 exec "\$CLAUDE_BIN" "\${CLEANED_ARGS[@]}"
 WRAPPER_EOF
@@ -810,7 +811,7 @@ cmd_add() {
     mkdir -p "$BIN_DIR"
 
     # Migrate existing wrappers from old location
-    local old_bin_dir="$CLAUDE_MODEL_DIR/bin"
+    local old_bin_dir="$CONFIG_DIR/bin"
     if [ -d "$old_bin_dir" ]; then
         local old_wrappers
         old_wrappers=$(find "$old_bin_dir" -name "claude-*" -type f 2>/dev/null)
@@ -867,11 +868,11 @@ cmd_add() {
     configure_path
 
     # Create tool config directory
-    mkdir -p "$CLAUDE_MODEL_DIR/.$tool_name"
+    mkdir -p "$CONFIG_DIR/.$tool_name"
 
     # Link skills folder
     if [ -d "$HOME/.claude/skills" ]; then
-        ln -sf "$HOME/.claude/skills" "$CLAUDE_MODEL_DIR/.$tool_name/skills"
+        ln -sf "$HOME/.claude/skills" "$CONFIG_DIR/.$tool_name/skills"
         echo -e "${GREEN}✓ Linked skills from ~/.claude/skills${NC}"
     else
         echo -e "${YELLOW}⚠ No skills folder found at ~/.claude/skills${NC}"
@@ -964,7 +965,7 @@ cmd_remove() {
     fi
 
     # Remove config directory
-    local config_path="$CLAUDE_MODEL_DIR/.$tool_name"
+    local config_path="$CONFIG_DIR/.$tool_name"
     if [ -d "$config_path" ]; then
         rm -rf "$config_path"
         echo -e "${GREEN}✓ Removed config directory${NC}"
@@ -1685,6 +1686,9 @@ cmd_upgrade() {
     echo "Upgrading Claude Code..."
     echo ""
 
+    # Ensure Claude Code is installed (creates packages directory if needed)
+    ensure_claude_code
+
     # Get current version before upgrade
     local old_version="unknown"
     if [ -f "$CLAUDE_BIN" ]; then
@@ -1694,9 +1698,9 @@ cmd_upgrade() {
     echo "Current version: $old_version"
     echo ""
 
-    # Change to the .claude-model directory
-    if ! cd "$CLAUDE_MODEL_DIR" 2>/dev/null; then
-        echo -e "${RED}Error: Claude Code directory not found: $CLAUDE_MODEL_DIR${NC}"
+    # Change to the Claude Code packages directory
+    if ! cd "$CLAUDE_CODE_DIR" 2>/dev/null; then
+        echo -e "${RED}Error: Claude Code directory not found: $CLAUDE_CODE_DIR${NC}"
         exit 1
     fi
 
@@ -2395,7 +2399,7 @@ cmd_doctor() {
     else
         echo -e "${YELLOW}WARN${NC}"
         echo "  Claude Code is not installed"
-        echo "  Run: cd ~/.claude-model && npm install @anthropic-ai/claude-code"
+        echo "  Run: claude-custom upgrade"
         ((issues++))
     fi
 
@@ -2426,12 +2430,12 @@ cmd_doctor() {
 
     # Check 6: PATH configuration
     echo -n "Checking PATH configuration... "
-    if echo "$PATH" | grep -q "$HOME/.claude-model/bin"; then
+    if echo "$PATH" | grep -q "$HOME/.claude-custom/bin"; then
         echo -e "${GREEN}OK${NC}"
     else
         echo -e "${YELLOW}WARN${NC}"
-        echo "  ~/.claude-model/bin is not in PATH"
-        echo "  Add it: export PATH=\"\$HOME/.claude-model/bin:\$PATH\""
+        echo "  ~/.claude-custom/bin is not in PATH"
+        echo "  Add it: export PATH=\"\$HOME/.claude-custom/bin:\$PATH\""
         ((issues++))
     fi
 
@@ -2453,7 +2457,7 @@ cmd_doctor() {
             echo -e "${GREEN}OK${NC} ($wrapper_count wrappers)"
         else
             echo -e "${YELLOW}WARN${NC} ($wrapper_count wrappers, $broken_wrappers broken)"
-            echo "  Run: chmod +x ~/.claude-model/bin/claude-*"
+            echo "  Run: chmod +x ~/.claude-custom/bin/claude-*"
             ((issues++))
         fi
     else
@@ -2516,7 +2520,7 @@ cmd_uninstall() {
         echo "The following will be removed:"
         echo "  - All deployment wrappers in $BIN_DIR"
         echo "  - Configuration in $CONFIG_DIR"
-        echo "  - Claude Code installation in $CLAUDE_MODEL_DIR"
+        echo "  - Claude Code installation in $CONFIG_DIR"
         echo ""
     fi
 
@@ -2559,8 +2563,8 @@ cmd_uninstall() {
         fi
 
         echo "Removing Claude Code installation..."
-        if [ -d "$CLAUDE_MODEL_DIR" ]; then
-            rm -rf "$CLAUDE_MODEL_DIR" 2>/dev/null
+        if [ -d "$CONFIG_DIR" ]; then
+            rm -rf "$CONFIG_DIR" 2>/dev/null
             echo -e "${GREEN}✓ Removed Claude Code${NC}"
         fi
     else
@@ -2585,7 +2589,7 @@ cmd_uninstall() {
     echo "Note: You may need to remove the PATH configuration from your shell profile:"
     echo "  ~/.zshrc or ~/.bashrc"
     echo ""
-    echo "Look for lines containing: .claude-model/bin"
+    echo "Look for lines containing: .claude-custom/bin"
 }
 
 # Run main

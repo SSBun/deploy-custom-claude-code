@@ -354,7 +354,7 @@ MODEL=glm-4-6 \
 
 ## 工作原理
 
-1. **创建项目结构**：设置 `~/claude-model/` 目录
+1. **创建项目结构**：设置 `~/.claude-custom/` 目录
 2. **安装 Claude Code**：通过 npm 安装 `@anthropic-ai/claude-code`
 3. **创建包装脚本**：使用您的 API 设置生成自定义包装脚本
 4. **多模型支持**：包装脚本支持 `--use-model` 标志进行运行时模型选择
@@ -374,7 +374,7 @@ MODEL=glm-4-6 \
 ├── claude                 # 默认别名脚本
 └── config.json            # 部署配置
 
-~/claude-model/
+~/.claude-custom/
 ├── .claude-doubao/        # claude-doubao 的配置
 ├── .claude-glm/           # claude-glm 的配置
 ├── node_modules/

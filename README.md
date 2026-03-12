@@ -354,7 +354,7 @@ MODEL=glm-4-6 \
 
 ## How It Works
 
-1. **Creates Project Structure**: Sets up `~/claude-model/` directory
+1. **Creates Project Structure**: Sets up `~/.claude-custom/` directory
 2. **Installs Claude Code**: Installs `@anthropic-ai/claude-code` via npm
 3. **Creates Wrapper Script**: Generates a custom wrapper script with your API settings
 4. **Multi-Model Support**: Wrapper scripts support `--use-model` flag for runtime model selection
@@ -374,7 +374,7 @@ After deployment:
 ├── claude                 # Default alias script
 └── config.json            # Deployment configurations
 
-~/claude-model/
+~/.claude-custom/
 ├── .claude-doubao/        # Config for claude-doubao
 ├── .claude-glm/           # Config for claude-glm
 ├── node_modules/
@@ -468,13 +468,13 @@ source ~/.zshrc  # or ~/.bashrc, ~/.bash_profile
 Check if PATH was added to your shell config:
 
 ```bash
-grep "claude-model/bin" ~/.zshrc  # or ~/.bashrc
+grep "claude-custom/bin" ~/.zshrc  # or ~/.bashrc
 ```
 
 If not found, manually add:
 
 ```bash
-echo 'export PATH="$HOME/claude-model/bin:$PATH"' >> ~/.zshrc
+echo 'export PATH="$HOME/claude-custom/bin:$PATH"' >> ~/.zshrc
 source ~/.zshrc
 ```
 

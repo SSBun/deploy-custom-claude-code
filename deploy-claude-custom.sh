@@ -18,9 +18,9 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Default configuration
-CLAUDE_MODEL_DIR="$HOME/.claude-model"
-BIN_DIR="$CLAUDE_MODEL_DIR/bin"
-CONFIG_DIR_BASE="$CLAUDE_MODEL_DIR"
+CONFIG_DIR="$HOME/.claude-custom"
+BIN_DIR="$CONFIG_DIR/bin"
+CONFIG_DIR_BASE="$CONFIG_DIR"
 
 # Variables to be set
 TOOL_NAME=""
@@ -356,7 +356,7 @@ cat > "$SCRIPT_PATH" << SCRIPT_EOF
 # Tool: $TOOL_NAME
 # Model: $MODEL_NAME
 
-CLAUDE_BIN="\$HOME/.claude-model/node_modules/.bin/claude"
+CLAUDE_BIN="\$HOME/.claude-custom/packages/node_modules/.bin/claude"
 
 # Check if Claude Code is installed
 if [ ! -f "\$CLAUDE_BIN" ]; then
@@ -372,7 +372,7 @@ export ANTHROPIC_MODEL="MODEL_NAME_PLACEHOLDER"
 export API_TIMEOUT_MS=TIMEOUT_PLACEHOLDER
 
 # Keep a separate config dir for this tool
-export CLAUDE_CONFIG_DIR="\$HOME/.claude-model/.$TOOL_NAME"
+export CLAUDE_CONFIG_DIR="\$HOME/.claude-custom/.$TOOL_NAME"
 
 exec "\$CLAUDE_BIN" "\$@"
 SCRIPT_EOF
@@ -490,12 +490,12 @@ fi
 
 # Add PATH configuration (different syntax for fish shell)
 if [ "$DETECTED_SHELL" = "fish" ]; then
-    PATH_LINE="set -gx PATH \$HOME/.claude-model/bin \$PATH"
+    PATH_LINE="set -gx PATH \$HOME/.claude-custom/bin \$PATH"
 else
-    PATH_LINE="export PATH=\"\$HOME/.claude-model/bin:\$PATH\""
+    PATH_LINE="export PATH=\"\$HOME/.claude-custom/bin:\$PATH\""
 fi
 
-if grep -q ".claude-model/bin" "$SHELL_RC" 2>/dev/null; then
+if grep -q ".claude-custom/bin" "$SHELL_RC" 2>/dev/null; then
     echo -e "${GREEN}✓ PATH already configured in $SHELL_RC${NC}"
 else
     # Create directory for fish config if needed
