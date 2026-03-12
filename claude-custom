@@ -387,6 +387,9 @@ main() {
         uninstall)
             cmd_uninstall "$@"
             ;;
+        link)
+            cmd_link "$@"
+            ;;
         self-update)
             cmd_self_update "$@"
             ;;
@@ -423,6 +426,7 @@ Commands:
   import       Import deployments from file
   doctor       Diagnose common issues
   uninstall    Uninstall claude-custom
+  link         Link skills/agents from system Claude Code to variants
   self-update  Update claude-custom itself
 
 Options:
@@ -2590,6 +2594,200 @@ cmd_uninstall() {
     echo "  ~/.zshrc or ~/.bashrc"
     echo ""
     echo "Look for lines containing: .claude-custom/bin"
+}
+
+# Link command - create symlinks from custom variants to system Claude Code
+cmd_link() {
+    local link_skills=true
+    local link_agents=true
+    local force=false
+    local variants=()
+
+    # Parse arguments
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --skills-only)
+                link_skills=true
+                link_agents=false
+                ;;
+            --agents-only)
+                link_skills=false
+                link_agents=true
+                ;;
+            --force|-f)
+                force=true
+                ;;
+            --help|-h)
+                show_link_help
+                return 0
+                ;;
+            -*)
+                echo -e "${RED}Unknown option: $1${NC}"
+                show_link_help
+                return 1
+                ;;
+            *)
+                variants+=("$1")
+                ;;
+        esac
+        shift
+    done
+
+    # Determine system Claude Code location
+    local system_claude_dir="$HOME/.claude"
+    local variants_base_dir="$HOME/.claude-model"
+
+    # Check if system Claude Code exists
+    if [ ! -d "$system_claude_dir" ]; then
+        echo -e "${RED}Error: System Claude Code not found at $system_claude_dir${NC}"
+        return 1
+    fi
+
+    # Find all variant directories
+    local all_variants=()
+    if [ ${#variants[@]} -eq 0 ]; then
+        # Link all variants in .claude-model
+        if [ -d "$variants_base_dir" ]; then
+            for dir in "$variants_base_dir"/.claude-*; do
+                if [ -d "$dir" ] && [ -e "$dir" ]; then
+                    all_variants+=("$(basename "$dir")")
+                fi
+            done
+        fi
+    else
+        # Use specified variants
+        for v in "${variants[@]}"; do
+            local normalized
+            normalized=$(normalize_tool_name "$v")
+            all_variants+=("$normalized")
+        done
+    fi
+
+    if [ ${#all_variants[@]} -eq 0 ]; then
+        echo -e "${YELLOW}No variant directories found to link.${NC}"
+        echo "Place variant configs in: $variants_base_dir/.claude-<name>"
+        return 0
+    fi
+
+    echo "Linking from system Claude Code ($system_claude_dir) to variants..."
+    echo ""
+
+    local linked_count=0
+
+    for variant in "${all_variants[@]}"; do
+        local variant_dir="$variants_base_dir/$variant"
+
+        if [ ! -d "$variant_dir" ]; then
+            echo -e "${YELLOW}Skipping $variant: directory not found${NC}"
+            continue
+        fi
+
+        echo -e "${CYAN}Processing: $variant${NC}"
+
+        # Link skills
+        if [ "$link_skills" = true ]; then
+            local skills_link="$variant_dir/skills"
+            local system_skills="$system_claude_dir/skills"
+
+            if [ ! -d "$system_skills" ]; then
+                echo -e "  ${YELLOW}Skipping skills: system skills not found${NC}"
+            else
+                if [ -L "$skills_link" ]; then
+                    if [ "$force" = true ]; then
+                        rm "$skills_link"
+                        ln -s "$system_skills" "$skills_link"
+                        echo -e "  ${GREEN}✓ Re-linked skills${NC}"
+                    else
+                        echo -e "  ${YELLOW}○ skills already linked (use --force to re-link)${NC}"
+                    fi
+                elif [ -d "$skills_link" ]; then
+                    if [ "$force" = true ]; then
+                        rm -rf "$skills_link"
+                        ln -s "$system_skills" "$skills_link"
+                        echo -e "  ${GREEN}✓ Replaced directory with skills link${NC}"
+                    else
+                        echo -e "  ${YELLOW}○ skills directory exists (use --force to replace)${NC}"
+                    fi
+                else
+                    ln -s "$system_skills" "$skills_link"
+                    echo -e "  ${GREEN}✓ Linked skills${NC}"
+                fi
+            fi
+        fi
+
+        # Link agents
+        if [ "$link_agents" = true ]; then
+            local agents_link="$variant_dir/agents"
+            local system_agents="$system_claude_dir/agents"
+
+            if [ ! -d "$system_agents" ]; then
+                echo -e "  ${YELLOW}Skipping agents: system agents not found${NC}"
+            else
+                if [ -L "$agents_link" ]; then
+                    if [ "$force" = true ]; then
+                        rm "$agents_link"
+                        ln -s "$system_agents" "$agents_link"
+                        echo -e "  ${GREEN}✓ Re-linked agents${NC}"
+                    else
+                        echo -e "  ${YELLOW}○ agents already linked (use --force to re-link)${NC}"
+                    fi
+                elif [ -d "$agents_link" ]; then
+                    if [ "$force" = true ]; then
+                        rm -rf "$agents_link"
+                        ln -s "$system_agents" "$agents_link"
+                        echo -e "  ${GREEN}✓ Replaced directory with agents link${NC}"
+                    else
+                        echo -e "  ${YELLOW}○ agents directory exists (use --force to replace)${NC}"
+                    fi
+                else
+                    ln -s "$system_agents" "$agents_link"
+                    echo -e "  ${GREEN}✓ Linked agents${NC}"
+                fi
+            fi
+        fi
+
+        ((linked_count++))
+        echo ""
+    done
+
+    echo -e "${GREEN}Done! Linked $linked_count variant(s).${NC}"
+}
+
+show_link_help() {
+    cat << EOF
+Link skills and agents from system Claude Code to custom variants
+
+Usage: claude-custom link [options] [variant...]
+
+Arguments:
+  variant                  Specific variant(s) to link (default: all found in ~/.claude-model)
+
+Options:
+  --skills-only           Only link skills
+  --agents-only           Only link agents
+  --force, -f            Force re-link if already exists
+  --help, -h             Show this help message
+
+Description:
+  Creates symlinks from custom variant directories (~/.claude-model/.claude-<name>)
+  to the system Claude Code (~/.claude) skills and agents folders.
+
+  This allows all custom variants to share the same skills and agents
+  from the system Claude Code installation.
+
+Examples:
+  # Link all variants found in ~/.claude-model
+  claude-custom link
+
+  # Link only specific variants
+  claude-custom link claude-minimax claude-zenmux
+
+  # Link only skills (not agents)
+  claude-custom link --skills-only
+
+  # Force re-link if already linked
+  claude-custom link --force
+EOF
 }
 
 # Run main
