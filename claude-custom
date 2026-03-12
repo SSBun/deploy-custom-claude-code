@@ -5,7 +5,7 @@
 set -e  # Exit on error
 
 # Version
-VERSION="1.1.0"
+VERSION="1.2.0"
 
 # Configuration
 CONFIG_DIR="$HOME/.claude-custom"
@@ -20,7 +20,14 @@ GREEN=$'\033[0;32m'
 YELLOW=$'\033[1;33m'
 BLUE=$'\033[0;34m'
 CYAN=$'\033[0;36m'
+MAGENTA=$'\033[0;35m'
+BOLD=$'\033[1m'
+DIM=$'\033[2m'
 NC=$'\033[0m' # No Color
+
+# Color aliases
+PURPLE="${MAGENTA}"
+ORANGE="${YELLOW}"
 
 # Initialize configuration directory and file
 init_config() {
@@ -409,36 +416,36 @@ main() {
 
 show_help() {
     cat << EOF
-claude-custom - Manage custom Claude Code deployments
+${BOLD}claude-custom${NC} - Manage custom Claude Code deployments
 
-Usage: claude-custom <command> [options]
+${BOLD}Usage:${NC} claude-custom <command> [options]
 
-Commands:
-  add          Add a new custom model deployment
-  remove       Remove a deployment
-  list         List all deployments
-  models       Manage models for a deployment
-  update       Update a deployment configuration
-  upgrade      Upgrade Claude Code to latest version
-  test         Test deployment(s) functionality
-  config       Manage configuration
-  export       Export deployments to file
-  import       Import deployments from file
-  doctor       Diagnose common issues
-  uninstall    Uninstall claude-custom
-  link         Link skills/agents from system Claude Code to variants
-  self-update  Update claude-custom itself
+${BOLD}Commands:${NC}
+  ${CYAN}add${NC}          ${DIM}Add a new custom model deployment${NC}
+  ${CYAN}remove${NC}       ${DIM}Remove a deployment${NC}
+  ${CYAN}list${NC}         ${DIM}List all deployments${NC}
+  ${CYAN}models${NC}       ${DIM}Manage models for a deployment${NC}
+  ${CYAN}update${NC}       ${DIM}Update a deployment configuration${NC}
+  ${CYAN}upgrade${NC}      ${DIM}Upgrade Claude Code to latest version${NC}
+  ${CYAN}test${NC}          ${DIM}Test deployment(s) functionality${NC}
+  ${CYAN}config${NC}        ${DIM}Manage configuration${NC}
+  ${CYAN}export${NC}        ${DIM}Export deployments to file${NC}
+  ${CYAN}import${NC}        ${DIM}Import deployments from file${NC}
+  ${CYAN}doctor${NC}        ${DIM}Diagnose common issues${NC}
+  ${CYAN}uninstall${NC}     ${DIM}Uninstall claude-custom${NC}
+  ${CYAN}link${NC}          ${DIM}Link skills/agents from system Claude Code to variants${NC}
+  ${CYAN}self-update${NC}   ${DIM}Update claude-custom itself${NC}
 
-Options:
-  --help, -h     Show this help message
-  --version, -v  Show version
+${BOLD}Options:${NC}
+  ${GREEN}--help, -h${NC}      ${DIM}Show this help message${NC}
+  ${GREEN}--version, -v${NC}   ${DIM}Show version${NC}
 
-Run 'claude-custom <command> --help' for more info on a command.
+Run ${MAGENTA}'claude-custom <command> --help'${NC} for more info on a command.
 EOF
 }
 
 show_version() {
-    echo "claude-custom $VERSION"
+    echo -e "${BOLD}claude-custom${NC} ${GREEN}$VERSION${NC}"
 }
 
 show_add_help() {
@@ -480,9 +487,9 @@ EOF
 
 show_list_help() {
     cat << EOF
-List all deployments
+${BOLD}List all deployments${NC}
 
-Usage: claude-custom list
+${BOLD}Usage:${NC} claude-custom list
 EOF
 }
 
@@ -1789,9 +1796,9 @@ cmd_self_update() {
     # Get current version
     local current_version="$VERSION"
 
-    echo "Updating claude-custom..."
+    echo -e "${BOLD}Updating claude-custom...${NC}"
     echo ""
-    echo "Current version: $current_version"
+    echo -e "Current version: ${YELLOW}$current_version${NC}"
     echo ""
 
     # Determine script location
@@ -1819,7 +1826,7 @@ cmd_self_update() {
 
     # Get latest release tag from GitHub API
     local repo="${REPO:-SSBun/deploy-custom-claude-code}"
-    echo "Checking for latest release..."
+    echo -e "${DIM}Checking for latest release...${NC}"
     local latest_tag
     latest_tag=$(curl -fsSL "https://api.github.com/repos/$repo/releases/latest" 2>/dev/null | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
 
@@ -1828,13 +1835,13 @@ cmd_self_update() {
         latest_tag="main"
     fi
 
-    echo "Latest release: $latest_tag"
+    echo -e "Latest release: ${MAGENTA}$latest_tag${NC}"
     echo ""
 
     # Download URL using the tag
     local download_url="https://raw.githubusercontent.com/$repo/$latest_tag/claude-custom"
 
-    echo "Downloading from: $download_url"
+    echo -e "${DIM}Downloading from:${NC} ${CYAN}$download_url${NC}"
     echo ""
 
     # Download to temp file
@@ -2669,7 +2676,7 @@ cmd_link() {
         return 0
     fi
 
-    echo "Linking from system Claude Code ($system_claude_dir) to variants..."
+    echo -e "${BOLD}Linking from system Claude Code${NC} ($system_claude_dir) to variants..."
     echo ""
 
     local linked_count=0
