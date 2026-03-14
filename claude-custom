@@ -5,7 +5,7 @@
 set -e  # Exit on error
 
 # Version
-VERSION="1.2.0"
+VERSION="1.2.1"
 
 # Configuration
 CONFIG_DIR="$HOME/.claude-custom"
@@ -549,14 +549,16 @@ Upgrade Claude Code
 Usage: claude-custom upgrade [name]
 
 Arguments:
-  <name>                  (Optional) Name of deployment to check after upgrade
+  <name>                  (Optional) Name of deployment to test after upgrade
 
 Options:
+  --all, -a               Upgrade all deployments after upgrade
   --latest, -l            Install latest version (npm install @anthropic-ai/claude-code@latest)
 
 Examples:
   claude-custom upgrade
   claude-custom upgrade --latest
+  claude-custom upgrade --all
   claude-custom upgrade doubao
 EOF
 }
@@ -1660,10 +1662,15 @@ cmd_upgrade() {
 
     local check_name=""
     local install_latest=false
+    local test_all=false
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case $1 in
+            --all|-a)
+                test_all=true
+                shift
+                ;;
             --latest|-l)
                 install_latest=true
                 shift
@@ -1752,6 +1759,39 @@ cmd_upgrade() {
             else
                 echo -e "${YELLOW}Warning: $check_name may have issues${NC}"
             fi
+        fi
+    elif [ "$test_all" = true ]; then
+        echo "Testing all deployments..."
+        echo ""
+
+        local names=()
+        while IFS= read -r name; do
+            names+=("$name")
+        done < <(jq -r '.deployments | keys[]' "$CONFIG_FILE")
+
+        local failed=0
+        for name in "${names[@]}"; do
+            local tool_name="claude-$name"
+            local wrapper_path="$BIN_DIR/$tool_name"
+
+            if [ -f "$wrapper_path" ]; then
+                if "$wrapper_path" --version >/dev/null 2>&1; then
+                    echo -e "${GREEN}✓${NC} $tool_name is working correctly"
+                else
+                    echo -e "${YELLOW}!${NC} $tool_name may have issues"
+                    failed=$((failed + 1))
+                fi
+            else
+                echo -e "${RED}✗${NC} $tool_name not found"
+                failed=$((failed + 1))
+            fi
+        done
+
+        echo ""
+        if [ $failed -eq 0 ]; then
+            echo -e "${GREEN}All deployments tested successfully${NC}"
+        else
+            echo -e "${YELLOW}$failed deployment(s) may have issues${NC}"
         fi
     fi
 
